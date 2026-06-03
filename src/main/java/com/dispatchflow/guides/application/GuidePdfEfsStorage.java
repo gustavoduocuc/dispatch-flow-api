@@ -22,10 +22,11 @@ public class GuidePdfEfsStorage {
         this.efsStorage = efsStorage;
     }
 
-    public void storeOnEfs(DispatchGuide guide, Instant now) {
+    public byte[] storeOnEfs(DispatchGuide guide, Instant now) {
         String relativePath = pathBuilder.buildRelativePath(guide);
         byte[] pdfContent = pdfGenerator.generate(guide);
         String absolutePath = efsStorage.write(relativePath, pdfContent);
         guide.markPdfGenerated(absolutePath, now);
+        return pdfContent;
     }
 }

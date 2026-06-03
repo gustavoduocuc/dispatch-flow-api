@@ -6,9 +6,9 @@ import com.dispatchflow.guides.application.dto.CreateGuideCommand;
 import com.dispatchflow.guides.application.dto.GuideResponse;
 import com.dispatchflow.guides.domain.entities.DispatchGuide;
 import com.dispatchflow.guides.domain.repositories.InMemoryGuideRepository;
-import com.dispatchflow.guides.unit.application.support.GuideApplicationTestSupport;
 import com.dispatchflow.guides.domain.valueobjects.GuideId;
 import com.dispatchflow.guides.domain.valueobjects.GuideStatus;
+import com.dispatchflow.guides.unit.application.support.GuideApplicationTestSupport;
 import com.dispatchflow.shared.domain.DomainError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,25 +29,30 @@ class DeleteGuideUseCaseTest {
             Clock.fixed(Instant.parse("2026-06-02T10:00:00Z"), ZoneOffset.UTC);
 
     private InMemoryGuideRepository repository;
+    private GuideApplicationTestSupport.InMemoryObjectStorage objectStorage;
     private CreateGuideUseCase createGuideUseCase;
     private DeleteGuideUseCase deleteGuideUseCase;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryGuideRepository();
-        createGuideUseCase = GuideApplicationTestSupport.createGuideUseCase(repository, FIXED_CLOCK);
-        deleteGuideUseCase = new DeleteGuideUseCase(repository, FIXED_CLOCK);
+        objectStorage = GuideApplicationTestSupport.inMemoryObjectStorage();
+        createGuideUseCase = GuideApplicationTestSupport.createGuideUseCase(repository, FIXED_CLOCK, objectStorage);
+        deleteGuideUseCase = GuideApplicationTestSupport.deleteGuideUseCase(repository, FIXED_CLOCK, objectStorage);
     }
 
     @Test
-    void marksGuideAsDeletedWithoutPhysicalRemoval() {
+    void marksGuideAsDeletedAndRemovesPdfFromS3() {
         GuideResponse created = createGuideUseCase.execute(sampleCommand());
+        String s3Key = created.s3Key();
+        assertTrue(objectStorage.contains(s3Key));
 
         deleteGuideUseCase.execute(created.id());
 
         DispatchGuide stored = repository.findById(GuideId.create(created.id())).orElseThrow();
         assertEquals(GuideStatus.DELETED, stored.getStatus());
         assertTrue(stored.isDeleted());
+        assertFalse(objectStorage.contains(s3Key));
     }
 
     @Test

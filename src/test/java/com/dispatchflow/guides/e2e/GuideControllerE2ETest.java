@@ -35,9 +35,10 @@ class GuideControllerE2ETest {
     private MockMvc mockMvc;
 
     @DynamicPropertySource
-    static void configureEfsPath(DynamicPropertyRegistry registry) throws Exception {
+    static void configureTestStorage(DynamicPropertyRegistry registry) throws Exception {
         efsBasePath = Files.createTempDirectory("efs-e2e");
         registry.add("efs.base-path", () -> efsBasePath.toString());
+        registry.add("dispatch.storage.s3.enabled", () -> "false");
     }
 
     @Test
@@ -60,8 +61,9 @@ class GuideControllerE2ETest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.guideNumber").value(startsWith("GD-")))
-                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
+                .andExpect(jsonPath("$.status").value("UPLOADED_TO_S3"))
                 .andExpect(jsonPath("$.efsPath").exists())
+                .andExpect(jsonPath("$.s3Key").exists())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -96,7 +98,8 @@ class GuideControllerE2ETest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createJson))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
+                .andExpect(jsonPath("$.status").value("UPLOADED_TO_S3"))
+                .andExpect(jsonPath("$.s3Key").exists())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -134,8 +137,9 @@ class GuideControllerE2ETest {
                         .content(updateJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.carrierName").value("Transportes Norte"))
-                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
-                .andExpect(jsonPath("$.efsPath").exists());
+                .andExpect(jsonPath("$.status").value("UPLOADED_TO_S3"))
+                .andExpect(jsonPath("$.efsPath").exists())
+                .andExpect(jsonPath("$.s3Key").exists());
 
         mockMvc.perform(delete("/api/guides/" + id))
                 .andExpect(status().isNoContent());

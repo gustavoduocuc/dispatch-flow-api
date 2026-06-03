@@ -3,14 +3,11 @@ package com.dispatchflow.guides.unit.application;
 import com.dispatchflow.guides.application.CreateGuideUseCase;
 import com.dispatchflow.guides.application.DeleteGuideUseCase;
 import com.dispatchflow.guides.application.DownloadGuidePdfUseCase;
-import com.dispatchflow.guides.application.GuidePdfEfsStorage;
 import com.dispatchflow.guides.application.dto.CreateGuideCommand;
 import com.dispatchflow.guides.application.dto.GuidePdfDownload;
 import com.dispatchflow.guides.application.dto.GuideResponse;
-import com.dispatchflow.guides.application.ports.EfsStoragePort;
 import com.dispatchflow.guides.domain.repositories.InMemoryGuideRepository;
-import com.dispatchflow.guides.domain.services.GuideNumberGenerator;
-import com.dispatchflow.guides.domain.services.GuidePdfPathBuilder;
+import com.dispatchflow.guides.unit.application.support.GuideApplicationTestSupport;
 import com.dispatchflow.shared.domain.DomainError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,28 +25,23 @@ class DownloadGuidePdfUseCaseTest {
 
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-06-02T10:00:00Z"), ZoneOffset.UTC);
-    private static final byte[] PDF_BYTES = new byte[] {37, 80, 68, 70};
+    private static final byte[] PDF_BYTES = GuideApplicationTestSupport.PDF_BYTES;
 
     private InMemoryGuideRepository repository;
+    private GuideApplicationTestSupport.InMemoryObjectStorage objectStorage;
     private CreateGuideUseCase createGuideUseCase;
     private DownloadGuidePdfUseCase downloadGuidePdfUseCase;
-    private StubEfsStorage efsStorage;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryGuideRepository();
-        efsStorage = new StubEfsStorage();
-        GuidePdfEfsStorage guidePdfEfsStorage = new GuidePdfEfsStorage(
-                new GuidePdfPathBuilder(),
-                guide -> PDF_BYTES,
-                efsStorage);
-        createGuideUseCase = new CreateGuideUseCase(
-                repository, new GuideNumberGenerator(), guidePdfEfsStorage, FIXED_CLOCK);
-        downloadGuidePdfUseCase = new DownloadGuidePdfUseCase(repository, efsStorage);
+        objectStorage = GuideApplicationTestSupport.inMemoryObjectStorage();
+        createGuideUseCase = GuideApplicationTestSupport.createGuideUseCase(repository, FIXED_CLOCK, objectStorage);
+        downloadGuidePdfUseCase = GuideApplicationTestSupport.downloadGuidePdfUseCase(repository, objectStorage);
     }
 
     @Test
-    void downloadsPdfForExistingGuide() {
+    void downloadsPdfFromS3WhenS3KeyIsPresent() {
         GuideResponse created = createGuideUseCase.execute(sampleCommand());
 
         GuidePdfDownload download = downloadGuidePdfUseCase.execute(created.id());
@@ -66,7 +58,8 @@ class DownloadGuidePdfUseCaseTest {
     @Test
     void throwsNotFoundWhenGuideIsDeleted() {
         GuideResponse created = createGuideUseCase.execute(sampleCommand());
-        new DeleteGuideUseCase(repository, FIXED_CLOCK).execute(created.id());
+        GuideApplicationTestSupport.deleteGuideUseCase(repository, FIXED_CLOCK, objectStorage)
+                .execute(created.id());
 
         assertThrows(DomainError.class, () -> downloadGuidePdfUseCase.execute(created.id()));
     }
@@ -80,18 +73,5 @@ class DownloadGuidePdfUseCaseTest {
                 null,
                 LocalDate.of(2026, 6, 2),
                 "responsable@empresa.cl");
-    }
-
-    private static class StubEfsStorage implements EfsStoragePort {
-
-        @Override
-        public String write(String relativePath, byte[] content) {
-            return "/efs/" + relativePath;
-        }
-
-        @Override
-        public byte[] read(String absolutePath) {
-            return PDF_BYTES;
-        }
     }
 }

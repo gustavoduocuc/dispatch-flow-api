@@ -168,6 +168,18 @@ public class DispatchGuide {
         this.updatedAt = now;
     }
 
+    public void markUploadedToS3(String s3Key, Instant now) {
+        if (isDeleted()) {
+            throw DomainError.validation("Cannot upload to S3 for a deleted guide");
+        }
+        if (s3Key == null || s3Key.isBlank()) {
+            throw DomainError.validation("S3 key is required");
+        }
+        this.s3Key = s3Key;
+        this.status = GuideStatus.UPLOADED_TO_S3;
+        this.updatedAt = now;
+    }
+
     public void markDeleted(Instant now) {
         if (isDeleted()) {
             throw DomainError.validation("Guide is already deleted");

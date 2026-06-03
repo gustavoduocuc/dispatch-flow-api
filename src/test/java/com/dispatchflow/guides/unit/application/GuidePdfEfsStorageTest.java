@@ -37,11 +37,12 @@ class GuidePdfEfsStorageTest {
     void storesPdfOnEfsAndMarksGuideAsGenerated() {
         DispatchGuide guide = createGuide();
 
-        guidePdfEfsStorage.storeOnEfs(guide, NOW);
+        byte[] pdfContent = guidePdfEfsStorage.storeOnEfs(guide, NOW);
 
         assertEquals(GuideStatus.PDF_GENERATED, guide.getStatus());
         assertEquals("/efs/" + efsStorage.lastRelativePath, guide.getEfsPath());
         assertEquals(PDF_BYTES, efsStorage.lastContent);
+        assertEquals(PDF_BYTES, pdfContent);
     }
 
     private DispatchGuide createGuide() {

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+: "${AWS_REGION:?Debe definir AWS_REGION}"
+: "${S3_BUCKET_NAME:?Debe definir S3_BUCKET_NAME}"
+
+export SPRING_PROFILES_ACTIVE=prod
+./mvnw spring-boot:run

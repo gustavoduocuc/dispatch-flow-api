@@ -1,0 +1,400 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "dispatch-flow-api",
+    "description": "Colección para probar el CRUD de guías de despacho con PDF automático en EFS y subida a S3.\n\nRequisitos:\n1. Ejecutar la app: `./run-local` (LocalStack + S3) o `./mvnw spring-boot:run` con S3 deshabilitado\n2. Base URL por defecto: `http://localhost:8080`\n\nFlujo sugerido:\n1. Create Guide (EFS + S3, guarda `guideId`)\n2. Download Guide PDF\n3. Get Guide by ID\n4. List Guides\n5. Search Guides\n6. Update Guide (regenera EFS + S3)\n7. Delete Guide (borra objeto S3)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "guideId",
+      "value": ""
+    },
+    {
+      "key": "carrierName",
+      "value": "Transportes Rápidos"
+    },
+    {
+      "key": "dispatchDate",
+      "value": "2026-06-02"
+    }
+  ],
+  "item": [
+    {
+      "name": "Guides",
+      "item": [
+        {
+          "name": "Create Guide",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has id, guideNumber, efsPath and s3Key', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.id).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json.guideNumber).to.match(/^GD-\\d{4}-\\d{6}$/);",
+                  "    pm.expect(json.status).to.eql('UPLOADED_TO_S3');",
+                  "    pm.expect(json.efsPath).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json.s3Key).to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('guideId', json.id);",
+                  "    pm.collectionVariables.set('carrierName', json.carrierName);",
+                  "    pm.collectionVariables.set('dispatchDate', json.dispatchDate);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carrierName\": \"Transportes Rápidos\",\n  \"recipientName\": \"María González\",\n  \"originAddress\": \"Av. Providencia 1234, Santiago\",\n  \"destinationAddress\": \"Calle Huérfanos 567, Santiago\",\n  \"description\": \"Electrónicos\",\n  \"dispatchDate\": \"2026-06-02\",\n  \"ownerEmail\": \"responsable@empresa.cl\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/guides",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides"]
+            },
+            "description": "Crea una guía de despacho. Genera PDF en EFS, sube a S3, `guideNumber`, `efsPath`, `s3Key` y `status: UPLOADED_TO_S3`."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Guide PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Content-Type is application/pdf', function () {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                  "});",
+                  "",
+                  "pm.test('Response body is not empty', function () {",
+                  "    pm.expect(pm.response.stream.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{guideId}}/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "{{guideId}}", "download"]
+            },
+            "description": "Descarga el PDF desde S3 (fallback EFS). Ejecutar después de Create Guide."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guide by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response matches guideId', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('guideId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{guideId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "{{guideId}}"]
+            },
+            "description": "Obtiene una guía por ID. Devuelve 404 si no existe o fue eliminada lógicamente."
+          },
+          "response": []
+        },
+        {
+          "name": "List Guides",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides"]
+            },
+            "description": "Lista todas las guías activas (excluye las marcadas como DELETED)."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Guides",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/search?carrierName={{carrierName}}&date={{dispatchDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "search"],
+              "query": [
+                {
+                  "key": "carrierName",
+                  "value": "{{carrierName}}",
+                  "description": "Nombre exacto del transportista"
+                },
+                {
+                  "key": "date",
+                  "value": "{{dispatchDate}}",
+                  "description": "Fecha de despacho (ISO-8601, ej. 2026-06-02)"
+                }
+              ]
+            },
+            "description": "Busca guías por transportista y fecha exacta de despacho."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Guide",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is UPLOADED_TO_S3', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('UPLOADED_TO_S3');",
+                  "});",
+                  "",
+                  "pm.test('efsPath and s3Key are present', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.efsPath).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json.s3Key).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carrierName\": \"Transportes Norte\",\n  \"recipientName\": \"Juan Pérez\",\n  \"originAddress\": \"Av. Libertador 99, Santiago\",\n  \"destinationAddress\": \"Calle Estado 100, Santiago\",\n  \"description\": \"Despacho actualizado\",\n  \"dispatchDate\": \"2026-06-03\",\n  \"ownerEmail\": \"nuevo.responsable@empresa.cl\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{guideId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "{{guideId}}"]
+            },
+            "description": "Actualiza una guía existente y regenera PDF en EFS + S3. Status final: UPLOADED_TO_S3."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guide",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/{{guideId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "{{guideId}}"]
+            },
+            "description": "Borra objeto S3 y eliminación lógica. La guía queda con status DELETED."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guide by ID (Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error message is present', function () {",
+                  "    pm.expect(pm.response.json().message).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guides/unknown-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides", "unknown-id"]
+            },
+            "description": "Ejemplo de guía inexistente. Útil para verificar el manejo de errores 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Guide (Validation Error)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Validation errors are present', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.message).to.eql('Validation failed');",
+                  "    pm.expect(json.fieldErrors).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/guides",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "guides"]
+            },
+            "description": "Ejemplo de request inválido para verificar validación de campos obligatorios."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Actuator",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Verifica que la aplicación está en ejecución."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

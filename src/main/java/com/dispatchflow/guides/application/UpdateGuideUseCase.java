@@ -14,14 +14,17 @@ public class UpdateGuideUseCase {
 
     private final GuideRepository guideRepository;
     private final GuidePdfEfsStorage guidePdfEfsStorage;
+    private final GuidePdfS3Storage guidePdfS3Storage;
     private final Clock clock;
 
     public UpdateGuideUseCase(
             GuideRepository guideRepository,
             GuidePdfEfsStorage guidePdfEfsStorage,
+            GuidePdfS3Storage guidePdfS3Storage,
             Clock clock) {
         this.guideRepository = guideRepository;
         this.guidePdfEfsStorage = guidePdfEfsStorage;
+        this.guidePdfS3Storage = guidePdfS3Storage;
         this.clock = clock;
     }
 
@@ -43,7 +46,8 @@ public class UpdateGuideUseCase {
                 Email.create(command.ownerEmail()),
                 clock.instant());
 
-        guidePdfEfsStorage.storeOnEfs(guide, clock.instant());
+        byte[] pdfContent = guidePdfEfsStorage.storeOnEfs(guide, clock.instant());
+        guidePdfS3Storage.storeOnS3(guide, pdfContent, clock.instant());
         guideRepository.save(guide);
         return GuideResponse.from(guide);
     }

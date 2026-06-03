@@ -1,19 +1,38 @@
 # dispatch-flow-api
 
-API para gestión de guías de despacho con generación automática de PDF y almacenamiento temporal en EFS (carpeta local en desarrollo).
+API para gestión de guías de despacho con generación automática de PDF, almacenamiento temporal en EFS y subida automática a AWS S3.
 
 ## Requisitos
 
 - Java 21
 - Maven 3.9+ (incluido vía `./mvnw`)
+- Docker (para desarrollo local con LocalStack)
 
-## Ejecutar la aplicación
+## Ejecutar en local (LocalStack + S3 emulado)
 
 ```bash
-./mvnw spring-boot:run
+chmod +x run-local run-prod scripts/init-localstack.sh
+./run-local
 ```
 
-La API queda disponible en `http://localhost:8080`.
+Este script levanta LocalStack, crea el bucket `dispatch-flow-local` y arranca la API con perfil `local`.
+
+## Ejecutar en producción
+
+Variables obligatorias:
+
+| Variable | Descripción |
+|----------|-------------|
+| `AWS_REGION` | Región AWS (ej. `us-east-1`) |
+| `S3_BUCKET_NAME` | Bucket S3 (default prod: `dispatch-flow-prod`) |
+
+Credenciales vía variables de entorno AWS estándar o rol IAM. Si usas credenciales temporales, define también `AWS_SESSION_TOKEN`.
+
+```bash
+export AWS_REGION=us-east-1
+export S3_BUCKET_NAME=dispatch-flow-prod
+./run-prod
+```
 
 ## Ejecutar tests
 
@@ -21,27 +40,50 @@ La API queda disponible en `http://localhost:8080`.
 ./mvnw test
 ```
 
-## Almacenamiento EFS (local)
+Los tests E2E usan almacenamiento S3 en memoria (`dispatch.storage.s3.enabled=false`) para CI estable.
 
-Variable de configuración:
+## Almacenamiento EFS (local / staging)
 
 | Variable | Local (default) | Producción |
 |----------|-----------------|------------|
 | `EFS_BASE_PATH` | `./tmp/efs` | `/app/efs` |
 
-Ejemplo con variable explícita:
-
-```bash
-EFS_BASE_PATH=./tmp/efs ./mvnw spring-boot:run
-```
-
 Al **crear** o **actualizar** una guía, el sistema:
 
 1. Genera un PDF con Apache PDFBox
 2. Lo guarda en `{EFS_BASE_PATH}/guides/{fecha}/{transportista-slug}/guide-{id}.pdf`
-3. Persiste la ruta absoluta en `efsPath` y el status `PDF_GENERATED`
+3. Sube el mismo PDF a S3 con la misma clave relativa
+4. Persiste `efsPath`, `s3Key` y el status `UPLOADED_TO_S3`
 
-Los archivos generados en local quedan en `./tmp/efs/` (ignorado por git).
+Si falla EFS o S3 durante POST/PUT, la operación completa falla.
+
+## Almacenamiento S3
+
+| Variable | Local (LocalStack) | Producción |
+|----------|-------------------|------------|
+| `DISPATCH_STORAGE_S3_ENABLED` | `true` | `true` |
+| `S3_BUCKET_NAME` | `dispatch-flow-local` | `dispatch-flow-prod` |
+| `AWS_S3_ENDPOINT` | `http://localhost:4566` | *(vacío — AWS real)* |
+| `AWS_ACCESS_KEY_ID` | `test` | IAM / env |
+| `AWS_SECRET_ACCESS_KEY` | `test` | IAM / env |
+| `AWS_SESSION_TOKEN` | *(opcional)* | *(si aplica)* |
+| `AWS_REGION` | `us-east-1` | región del bucket |
+
+Estructura de claves S3 (igual que rutas EFS relativas):
+
+```
+guides/{fecha}/{transportista-slug}/guide-{id}.pdf
+```
+
+Verificar objetos en local:
+
+```bash
+awslocal s3 ls s3://dispatch-flow-local/guides/ --recursive
+```
+
+**Delete:** borra el objeto S3 (si existe) y marca la guía como `DELETED` en BD.
+
+**Download:** lee desde S3 si hay `s3Key`; fallback a EFS para datos legacy.
 
 ## Consola H2
 
@@ -58,17 +100,15 @@ Con la aplicación en ejecución:
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| POST | `/api/guides` | Crear guía y generar PDF en EFS |
+| POST | `/api/guides` | Crear guía, PDF en EFS y S3 |
 | GET | `/api/guides/{id}` | Obtener por ID |
-| GET | `/api/guides/{id}/download` | Descargar PDF de la guía |
+| GET | `/api/guides/{id}/download` | Descargar PDF (S3 preferido) |
 | GET | `/api/guides` | Listar guías activas |
-| PUT | `/api/guides/{id}` | Actualizar guía y regenerar PDF |
-| DELETE | `/api/guides/{id}` | Eliminar lógicamente |
+| PUT | `/api/guides/{id}` | Actualizar guía y regenerar PDF + S3 |
+| DELETE | `/api/guides/{id}` | Borrar objeto S3 + eliminación lógica |
 | GET | `/api/guides/search?carrierName=&date=` | Buscar por transportista y fecha |
 
 El campo `guideNumber` lo genera el sistema. La eliminación es lógica (`status = DELETED`); las guías eliminadas no aparecen en listados ni búsquedas.
-
-Si falla la generación o escritura del PDF durante POST/PUT, la operación completa falla (no se persiste una guía sin archivo).
 
 ## Ejemplo Postman: crear guía
 
@@ -86,9 +126,13 @@ Si falla la generación o escritura del PDF durante POST/PUT, la operación comp
 }
 ```
 
-Respuesta esperada: `201 Created` con `id`, `guideNumber`, `efsPath` y `status: PDF_GENERATED`.
+Respuesta esperada: `201 Created` con `id`, `guideNumber`, `efsPath`, `s3Key` y `status: UPLOADED_TO_S3`.
 
-Verificar el archivo en `./tmp/efs/guides/2026-06-02/transportes-rapidos/`.
+Verificar EFS: `./tmp/efs/guides/2026-06-02/transportes-rapidos/`
+
+Verificar S3: `awslocal s3 ls s3://dispatch-flow-local/guides/2026-06-02/transportes-rapidos/`
+
+Colección Postman: [`postman/dispatch-flow-api.postman_collection.json`](postman/dispatch-flow-api.postman_collection.json)
 
 ## Ejemplo Postman: descargar PDF
 
@@ -105,13 +149,8 @@ Respuesta: `200 OK`, `Content-Type: application/pdf`, archivo adjunto `guide-{id
 El proyecto sigue arquitectura hexagonal (inside-out):
 
 - **Dominio**: entidades, value objects, `GuidePdfPathBuilder`, repositorio
-- **Aplicación**: casos de uso, `GuidePdfEfsStorage`, puertos PDF/EFS
-- **Infraestructura**: JPA/H2, PDFBox, `LocalEfsStorageAdapter`, controladores REST
-
-### Integraciones futuras (preparadas, sin implementar)
-
-- `ObjectStoragePort` — subida a AWS S3 (endpoint dedicado en iteración futura)
-- Campo `s3Key` en el modelo, sin uso actual
+- **Aplicación**: casos de uso, `GuidePdfEfsStorage`, `GuidePdfS3Storage`, puertos PDF/EFS/S3
+- **Infraestructura**: JPA/H2, PDFBox, `LocalEfsStorageAdapter`, `S3ObjectStorageAdapter`, controladores REST
 
 ## Health check
 

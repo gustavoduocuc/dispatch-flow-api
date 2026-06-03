@@ -35,7 +35,8 @@ class SearchGuidesUseCaseTest {
         InMemoryGuideRepository repository = new InMemoryGuideRepository();
         createGuideUseCase = GuideApplicationTestSupport.createGuideUseCase(repository, FIXED_CLOCK);
         searchGuidesUseCase = new SearchGuidesUseCase(repository);
-        deleteGuideUseCase = new DeleteGuideUseCase(repository, FIXED_CLOCK);
+        deleteGuideUseCase = GuideApplicationTestSupport.deleteGuideUseCase(
+                repository, FIXED_CLOCK, GuideApplicationTestSupport.inMemoryObjectStorage());
     }
 
     @Test

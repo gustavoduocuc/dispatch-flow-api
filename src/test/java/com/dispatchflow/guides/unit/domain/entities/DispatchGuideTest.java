@@ -155,6 +155,44 @@ class DispatchGuideTest {
         assertThrows(DomainError.class, () -> guide.markPdfGenerated("/tmp/path.pdf", NOW.plusSeconds(60)));
     }
 
+    @Test
+    void marksUploadedToS3WithKeyAndStatus() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markPdfGenerated("/tmp/efs/guide.pdf", NOW.plusSeconds(30));
+        Instant uploadTime = NOW.plusSeconds(45);
+        String s3Key = "guides/2026-06-02/transportes-rapidos/guide-id.pdf";
+
+        guide.markUploadedToS3(s3Key, uploadTime);
+
+        assertEquals(GuideStatus.UPLOADED_TO_S3, guide.getStatus());
+        assertEquals(s3Key, guide.getS3Key());
+        assertEquals("/tmp/efs/guide.pdf", guide.getEfsPath());
+        assertEquals(uploadTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void allowsReuploadingToS3WhenAlreadyUploaded() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markPdfGenerated("/tmp/efs/guide.pdf", NOW.plusSeconds(30));
+        guide.markUploadedToS3("guides/old-key.pdf", NOW.plusSeconds(45));
+        Instant reuploadTime = NOW.plusSeconds(60);
+        String newKey = "guides/2026-06-03/transportes-norte/guide-id.pdf";
+
+        guide.markUploadedToS3(newKey, reuploadTime);
+
+        assertEquals(GuideStatus.UPLOADED_TO_S3, guide.getStatus());
+        assertEquals(newKey, guide.getS3Key());
+        assertEquals(reuploadTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void rejectsS3UploadWhenGuideIsDeleted() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markDeleted(NOW.plusSeconds(30));
+
+        assertThrows(DomainError.class, () -> guide.markUploadedToS3("guides/key.pdf", NOW.plusSeconds(60)));
+    }
+
     private DispatchGuide createSampleGuide() {
         return DispatchGuide.create(
                 GuideId.generate(),
