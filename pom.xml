@@ -11,8 +11,8 @@
 	<groupId>com.dispatchflow</groupId>
 	<artifactId>dispatch-flow-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>dispatch-flow-api</name>
+	<description>API de gestión de guías de despacho</description>
 	<url/>
 	<licenses>
 		<license/>

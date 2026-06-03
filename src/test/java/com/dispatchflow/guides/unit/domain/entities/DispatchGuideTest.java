@@ -1,0 +1,136 @@
+package com.dispatchflow.guides.unit.domain.entities;
+
+import com.dispatchflow.guides.domain.entities.DispatchGuide;
+import com.dispatchflow.guides.domain.valueobjects.Email;
+import com.dispatchflow.guides.domain.valueobjects.GuideId;
+import com.dispatchflow.guides.domain.valueobjects.GuideNumber;
+import com.dispatchflow.guides.domain.valueobjects.GuideStatus;
+import com.dispatchflow.shared.domain.DomainError;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.time.LocalDate;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class DispatchGuideTest {
+
+    private static final Instant NOW = Instant.parse("2026-06-02T10:00:00Z");
+
+    @Test
+    void createsGuideWithCreatedStatus() {
+        DispatchGuide guide = DispatchGuide.create(
+                GuideId.generate(),
+                GuideNumber.create("GD-2026-000001"),
+                "Transportes Rápidos",
+                "María González",
+                "Av. Providencia 1234, Santiago",
+                "Calle Huérfanos 567, Santiago",
+                "Electrónicos",
+                LocalDate.of(2026, 6, 2),
+                Email.create("responsable@empresa.cl"),
+                NOW);
+
+        assertEquals(GuideStatus.CREATED, guide.getStatus());
+        assertEquals(NOW, guide.getCreatedAt());
+        assertEquals(NOW, guide.getUpdatedAt());
+        assertNull(guide.getEfsPath());
+        assertNull(guide.getS3Key());
+    }
+
+    @Test
+    void rejectsCreateWhenCarrierNameIsBlank() {
+        assertThrows(DomainError.class, () -> DispatchGuide.create(
+                GuideId.generate(),
+                GuideNumber.create("GD-2026-000001"),
+                "  ",
+                "María González",
+                "Av. Providencia 1234, Santiago",
+                "Calle Huérfanos 567, Santiago",
+                null,
+                LocalDate.of(2026, 6, 2),
+                Email.create("responsable@empresa.cl"),
+                NOW));
+    }
+
+    @Test
+    void updatesGuideAndSetsUpdatedStatus() {
+        DispatchGuide guide = createSampleGuide();
+        Instant updateTime = NOW.plusSeconds(60);
+
+        guide.update(
+                "Transportes Norte",
+                "Juan Pérez",
+                "Av. Libertador 99, Santiago",
+                "Calle Estado 100, Santiago",
+                "Despacho actualizado",
+                LocalDate.of(2026, 6, 3),
+                Email.create("nuevo.responsable@empresa.cl"),
+                updateTime);
+
+        assertEquals("Transportes Norte", guide.getCarrierName());
+        assertEquals(GuideStatus.UPDATED, guide.getStatus());
+        assertEquals(updateTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void rejectsUpdateWhenGuideIsDeleted() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markDeleted(NOW.plusSeconds(30));
+
+        assertThrows(DomainError.class, () -> guide.update(
+                "Transportista",
+                "Destinatario",
+                "Origen",
+                "Destino",
+                null,
+                LocalDate.of(2026, 6, 2),
+                Email.create("responsable@empresa.cl"),
+                NOW.plusSeconds(60)));
+    }
+
+    @Test
+    void marksGuideAsDeleted() {
+        DispatchGuide guide = createSampleGuide();
+        Instant deleteTime = NOW.plusSeconds(120);
+
+        guide.markDeleted(deleteTime);
+
+        assertTrue(guide.isDeleted());
+        assertEquals(GuideStatus.DELETED, guide.getStatus());
+        assertEquals(deleteTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void rejectsDeleteWhenAlreadyDeleted() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markDeleted(NOW.plusSeconds(30));
+
+        assertThrows(DomainError.class, () -> guide.markDeleted(NOW.plusSeconds(60)));
+    }
+
+    @Test
+    void isNotDeletedInitially() {
+        DispatchGuide guide = createSampleGuide();
+
+        assertFalse(guide.isDeleted());
+    }
+
+    private DispatchGuide createSampleGuide() {
+        return DispatchGuide.create(
+                GuideId.generate(),
+                GuideNumber.create("GD-2026-000001"),
+                "Transportes Rápidos",
+                "María González",
+                "Av. Providencia 1234, Santiago",
+                "Calle Huérfanos 567, Santiago",
+                "Electrónicos",
+                LocalDate.of(2026, 6, 2),
+                Email.create("responsable@empresa.cl"),
+                NOW);
+    }
+}
