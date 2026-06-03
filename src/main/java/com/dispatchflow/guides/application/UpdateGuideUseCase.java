@@ -13,10 +13,15 @@ import java.time.Clock;
 public class UpdateGuideUseCase {
 
     private final GuideRepository guideRepository;
+    private final GuidePdfEfsStorage guidePdfEfsStorage;
     private final Clock clock;
 
-    public UpdateGuideUseCase(GuideRepository guideRepository, Clock clock) {
+    public UpdateGuideUseCase(
+            GuideRepository guideRepository,
+            GuidePdfEfsStorage guidePdfEfsStorage,
+            Clock clock) {
         this.guideRepository = guideRepository;
+        this.guidePdfEfsStorage = guidePdfEfsStorage;
         this.clock = clock;
     }
 
@@ -38,6 +43,7 @@ public class UpdateGuideUseCase {
                 Email.create(command.ownerEmail()),
                 clock.instant());
 
+        guidePdfEfsStorage.storeOnEfs(guide, clock.instant());
         guideRepository.save(guide);
         return GuideResponse.from(guide);
     }

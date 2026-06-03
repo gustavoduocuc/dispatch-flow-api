@@ -6,14 +6,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -21,8 +29,54 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class GuideControllerE2ETest {
 
+    private static Path efsBasePath;
+
     @Autowired
     private MockMvc mockMvc;
+
+    @DynamicPropertySource
+    static void configureEfsPath(DynamicPropertyRegistry registry) throws Exception {
+        efsBasePath = Files.createTempDirectory("efs-e2e");
+        registry.add("efs.base-path", () -> efsBasePath.toString());
+    }
+
+    @Test
+    void createsGuideWithPdfOnEfsAndAllowsDownload() throws Exception {
+        String createJson = """
+                {
+                  "carrierName": "Transportes Rápidos",
+                  "recipientName": "María González",
+                  "originAddress": "Av. Providencia 1234, Santiago",
+                  "destinationAddress": "Calle Huérfanos 567, Santiago",
+                  "description": "Electrónicos",
+                  "dispatchDate": "2026-06-02",
+                  "ownerEmail": "responsable@empresa.cl"
+                }
+                """;
+
+        String createResponse = mockMvc.perform(post("/api/guides")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.guideNumber").value(startsWith("GD-")))
+                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
+                .andExpect(jsonPath("$.efsPath").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String id = extractJsonField(createResponse, "id");
+        String efsPath = extractJsonField(createResponse, "efsPath");
+
+        assertTrue(Files.exists(Path.of(efsPath)));
+
+        mockMvc.perform(get("/api/guides/" + id + "/download"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"guide-" + id + ".pdf\""))
+                .andExpect(content().contentType("application/pdf"));
+    }
 
     @Test
     void createsListsGetsUpdatesSearchesAndDeletesGuide() throws Exception {
@@ -42,9 +96,7 @@ class GuideControllerE2ETest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createJson))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").exists())
-                .andExpect(jsonPath("$.guideNumber").value(startsWith("GD-")))
-                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -82,7 +134,8 @@ class GuideControllerE2ETest {
                         .content(updateJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.carrierName").value("Transportes Norte"))
-                .andExpect(jsonPath("$.status").value("UPDATED"));
+                .andExpect(jsonPath("$.status").value("PDF_GENERATED"))
+                .andExpect(jsonPath("$.efsPath").exists());
 
         mockMvc.perform(delete("/api/guides/" + id))
                 .andExpect(status().isNoContent());

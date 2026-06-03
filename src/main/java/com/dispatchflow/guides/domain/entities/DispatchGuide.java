@@ -156,6 +156,18 @@ public class DispatchGuide {
         this.updatedAt = now;
     }
 
+    public void markPdfGenerated(String efsPath, Instant now) {
+        if (isDeleted()) {
+            throw DomainError.validation("Cannot generate PDF for a deleted guide");
+        }
+        if (efsPath == null || efsPath.isBlank()) {
+            throw DomainError.validation("EFS path is required");
+        }
+        this.efsPath = efsPath;
+        this.status = GuideStatus.PDF_GENERATED;
+        this.updatedAt = now;
+    }
+
     public void markDeleted(Instant now) {
         if (isDeleted()) {
             throw DomainError.validation("Guide is already deleted");

@@ -14,14 +14,17 @@ public class CreateGuideUseCase {
 
     private final GuideRepository guideRepository;
     private final GuideNumberGenerator guideNumberGenerator;
+    private final GuidePdfEfsStorage guidePdfEfsStorage;
     private final Clock clock;
 
     public CreateGuideUseCase(
             GuideRepository guideRepository,
             GuideNumberGenerator guideNumberGenerator,
+            GuidePdfEfsStorage guidePdfEfsStorage,
             Clock clock) {
         this.guideRepository = guideRepository;
         this.guideNumberGenerator = guideNumberGenerator;
+        this.guidePdfEfsStorage = guidePdfEfsStorage;
         this.clock = clock;
     }
 
@@ -39,6 +42,7 @@ public class CreateGuideUseCase {
                 Email.create(command.ownerEmail()),
                 clock.instant());
 
+        guidePdfEfsStorage.storeOnEfs(guide, clock.instant());
         guideRepository.save(guide);
         return GuideResponse.from(guide);
     }

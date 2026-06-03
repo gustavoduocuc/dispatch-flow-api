@@ -6,7 +6,7 @@ import com.dispatchflow.guides.application.ListGuidesUseCase;
 import com.dispatchflow.guides.application.dto.CreateGuideCommand;
 import com.dispatchflow.guides.application.dto.GuideResponse;
 import com.dispatchflow.guides.domain.repositories.InMemoryGuideRepository;
-import com.dispatchflow.guides.domain.services.GuideNumberGenerator;
+import com.dispatchflow.guides.unit.application.support.GuideApplicationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ class ListGuidesUseCaseTest {
     @BeforeEach
     void setUp() {
         InMemoryGuideRepository repository = new InMemoryGuideRepository();
-        createGuideUseCase = new CreateGuideUseCase(repository, new GuideNumberGenerator(), FIXED_CLOCK);
+        createGuideUseCase = GuideApplicationTestSupport.createGuideUseCase(repository, FIXED_CLOCK);
         listGuidesUseCase = new ListGuidesUseCase(repository);
         deleteGuideUseCase = new DeleteGuideUseCase(repository, FIXED_CLOCK);
     }

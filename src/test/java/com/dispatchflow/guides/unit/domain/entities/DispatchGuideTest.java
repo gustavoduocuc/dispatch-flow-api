@@ -120,6 +120,41 @@ class DispatchGuideTest {
         assertFalse(guide.isDeleted());
     }
 
+    @Test
+    void marksPdfGeneratedWithEfsPathAndStatus() {
+        DispatchGuide guide = createSampleGuide();
+        Instant pdfTime = NOW.plusSeconds(30);
+        String efsPath = "/tmp/efs/guides/2026-06-02/transportes-rapidos/guide-id.pdf";
+
+        guide.markPdfGenerated(efsPath, pdfTime);
+
+        assertEquals(GuideStatus.PDF_GENERATED, guide.getStatus());
+        assertEquals(efsPath, guide.getEfsPath());
+        assertEquals(pdfTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void allowsRegeneratingPdfWhenAlreadyGenerated() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markPdfGenerated("/tmp/first.pdf", NOW.plusSeconds(30));
+        Instant regenerateTime = NOW.plusSeconds(60);
+        String newPath = "/tmp/second.pdf";
+
+        guide.markPdfGenerated(newPath, regenerateTime);
+
+        assertEquals(GuideStatus.PDF_GENERATED, guide.getStatus());
+        assertEquals(newPath, guide.getEfsPath());
+        assertEquals(regenerateTime, guide.getUpdatedAt());
+    }
+
+    @Test
+    void rejectsPdfGenerationWhenGuideIsDeleted() {
+        DispatchGuide guide = createSampleGuide();
+        guide.markDeleted(NOW.plusSeconds(30));
+
+        assertThrows(DomainError.class, () -> guide.markPdfGenerated("/tmp/path.pdf", NOW.plusSeconds(60)));
+    }
+
     private DispatchGuide createSampleGuide() {
         return DispatchGuide.create(
                 GuideId.generate(),

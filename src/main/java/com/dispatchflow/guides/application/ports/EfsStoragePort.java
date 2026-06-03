@@ -2,5 +2,7 @@ package com.dispatchflow.guides.application.ports;
 
 public interface EfsStoragePort {
 
-    void write(String path, byte[] content);
+    String write(String relativePath, byte[] content);
+
+    byte[] read(String absolutePath);
 }

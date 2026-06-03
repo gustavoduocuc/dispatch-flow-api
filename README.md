@@ -1,6 +1,6 @@
 # dispatch-flow-api
 
-API para gestión de guías de despacho. Esta versión incluye un CRUD básico con persistencia local en H2.
+API para gestión de guías de despacho con generación automática de PDF y almacenamiento temporal en EFS (carpeta local en desarrollo).
 
 ## Requisitos
 
@@ -21,6 +21,28 @@ La API queda disponible en `http://localhost:8080`.
 ./mvnw test
 ```
 
+## Almacenamiento EFS (local)
+
+Variable de configuración:
+
+| Variable | Local (default) | Producción |
+|----------|-----------------|------------|
+| `EFS_BASE_PATH` | `./tmp/efs` | `/app/efs` |
+
+Ejemplo con variable explícita:
+
+```bash
+EFS_BASE_PATH=./tmp/efs ./mvnw spring-boot:run
+```
+
+Al **crear** o **actualizar** una guía, el sistema:
+
+1. Genera un PDF con Apache PDFBox
+2. Lo guarda en `{EFS_BASE_PATH}/guides/{fecha}/{transportista-slug}/guide-{id}.pdf`
+3. Persiste la ruta absoluta en `efsPath` y el status `PDF_GENERATED`
+
+Los archivos generados en local quedan en `./tmp/efs/` (ignorado por git).
+
 ## Consola H2
 
 Con la aplicación en ejecución:
@@ -36,14 +58,17 @@ Con la aplicación en ejecución:
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| POST | `/api/guides` | Crear guía |
+| POST | `/api/guides` | Crear guía y generar PDF en EFS |
 | GET | `/api/guides/{id}` | Obtener por ID |
+| GET | `/api/guides/{id}/download` | Descargar PDF de la guía |
 | GET | `/api/guides` | Listar guías activas |
-| PUT | `/api/guides/{id}` | Actualizar guía |
+| PUT | `/api/guides/{id}` | Actualizar guía y regenerar PDF |
 | DELETE | `/api/guides/{id}` | Eliminar lógicamente |
 | GET | `/api/guides/search?carrierName=&date=` | Buscar por transportista y fecha |
 
 El campo `guideNumber` lo genera el sistema. La eliminación es lógica (`status = DELETED`); las guías eliminadas no aparecen en listados ni búsquedas.
+
+Si falla la generación o escritura del PDF durante POST/PUT, la operación completa falla (no se persiste una guía sin archivo).
 
 ## Ejemplo Postman: crear guía
 
@@ -61,7 +86,15 @@ El campo `guideNumber` lo genera el sistema. La eliminación es lógica (`status
 }
 ```
 
-Respuesta esperada: `201 Created` con `id`, `guideNumber` (formato `GD-AAAA-NNNNNN`) y `status: CREATED`.
+Respuesta esperada: `201 Created` con `id`, `guideNumber`, `efsPath` y `status: PDF_GENERATED`.
+
+Verificar el archivo en `./tmp/efs/guides/2026-06-02/transportes-rapidos/`.
+
+## Ejemplo Postman: descargar PDF
+
+**GET** `http://localhost:8080/api/guides/{id}/download`
+
+Respuesta: `200 OK`, `Content-Type: application/pdf`, archivo adjunto `guide-{id}.pdf`.
 
 ## Ejemplo Postman: búsqueda
 
@@ -71,18 +104,14 @@ Respuesta esperada: `201 Created` con `id`, `guideNumber` (formato `GD-AAAA-NNNN
 
 El proyecto sigue arquitectura hexagonal (inside-out):
 
-- **Dominio**: entidades, value objects, repositorio (interfaz + InMemory)
-- **Aplicación**: casos de uso y DTOs
-- **Infraestructura**: JPA/H2, controladores REST
+- **Dominio**: entidades, value objects, `GuidePdfPathBuilder`, repositorio
+- **Aplicación**: casos de uso, `GuidePdfEfsStorage`, puertos PDF/EFS
+- **Infraestructura**: JPA/H2, PDFBox, `LocalEfsStorageAdapter`, controladores REST
 
 ### Integraciones futuras (preparadas, sin implementar)
 
-Puertos definidos en `guides/application/ports/`:
-
-- `ObjectStoragePort` — almacenamiento S3
-- `EfsStoragePort` — almacenamiento EFS
-
-Los campos `s3Key` y `efsPath` existen en el modelo pero permanecen en `null` en esta versión. La dependencia `ojdbc11` en el `pom.xml` permite migrar a Oracle cambiando el adapter de `GuideRepository` sin modificar el dominio.
+- `ObjectStoragePort` — subida a AWS S3 (endpoint dedicado en iteración futura)
+- Campo `s3Key` en el modelo, sin uso actual
 
 ## Health check
 

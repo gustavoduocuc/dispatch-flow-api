@@ -2,16 +2,20 @@ package com.dispatchflow.guides.infrastructure.http;
 
 import com.dispatchflow.guides.application.CreateGuideUseCase;
 import com.dispatchflow.guides.application.DeleteGuideUseCase;
+import com.dispatchflow.guides.application.DownloadGuidePdfUseCase;
 import com.dispatchflow.guides.application.GetGuideUseCase;
 import com.dispatchflow.guides.application.ListGuidesUseCase;
 import com.dispatchflow.guides.application.SearchGuidesUseCase;
 import com.dispatchflow.guides.application.UpdateGuideUseCase;
 import com.dispatchflow.guides.application.dto.CreateGuideCommand;
+import com.dispatchflow.guides.application.dto.GuidePdfDownload;
 import com.dispatchflow.guides.application.dto.GuideResponse;
 import com.dispatchflow.guides.application.dto.UpdateGuideCommand;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +40,7 @@ public class GuideController {
     private final UpdateGuideUseCase updateGuideUseCase;
     private final DeleteGuideUseCase deleteGuideUseCase;
     private final SearchGuidesUseCase searchGuidesUseCase;
+    private final DownloadGuidePdfUseCase downloadGuidePdfUseCase;
 
     public GuideController(
             CreateGuideUseCase createGuideUseCase,
@@ -43,13 +48,15 @@ public class GuideController {
             ListGuidesUseCase listGuidesUseCase,
             UpdateGuideUseCase updateGuideUseCase,
             DeleteGuideUseCase deleteGuideUseCase,
-            SearchGuidesUseCase searchGuidesUseCase) {
+            SearchGuidesUseCase searchGuidesUseCase,
+            DownloadGuidePdfUseCase downloadGuidePdfUseCase) {
         this.createGuideUseCase = createGuideUseCase;
         this.getGuideUseCase = getGuideUseCase;
         this.listGuidesUseCase = listGuidesUseCase;
         this.updateGuideUseCase = updateGuideUseCase;
         this.deleteGuideUseCase = deleteGuideUseCase;
         this.searchGuidesUseCase = searchGuidesUseCase;
+        this.downloadGuidePdfUseCase = downloadGuidePdfUseCase;
     }
 
     @PostMapping
@@ -84,6 +91,15 @@ public class GuideController {
             @RequestParam String carrierName,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return searchGuidesUseCase.execute(carrierName, date);
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable String id) {
+        GuidePdfDownload download = downloadGuidePdfUseCase.execute(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName() + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(download.content());
     }
 
     private CreateGuideCommand toCreateCommand(CreateGuideRequest request) {
