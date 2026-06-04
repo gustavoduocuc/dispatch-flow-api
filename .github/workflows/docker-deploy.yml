@@ -38,10 +38,7 @@ jobs:
       - name: Prepare Oracle wallet for Docker build
         env:
           ORACLE_WALLET_BASE64: ${{ secrets.ORACLE_WALLET_BASE64 }}
-        run: |
-          mkdir -p wallet
-          echo "$ORACLE_WALLET_BASE64" | base64 -d > wallet.zip
-          unzip -o wallet.zip -d wallet
+        run: ./scripts/prepare-wallet-for-docker.sh
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -53,10 +50,6 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          if [ ! -f wallet/tnsnames.ora ]; then
-            echo "wallet/tnsnames.ora no encontrado. Configure ORACLE_WALLET_BASE64 en GitHub Secrets." >&2
-            exit 1
-          fi
           docker build -t "${DOCKERHUB_USERNAME}/dispatch-flow-api:latest" .
           docker push "${DOCKERHUB_USERNAME}/dispatch-flow-api:latest"
 

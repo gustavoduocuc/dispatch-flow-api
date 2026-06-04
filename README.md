@@ -12,7 +12,7 @@ API para gestión de guías de despacho con generación automática de PDF, alma
 ## Ejecutar en local (H2 + LocalStack)
 
 ```bash
-chmod +x run-local run-prod run-docker scripts/init-localstack.sh scripts/setup-oracle-wallet.sh scripts/setup-efs-mount.sh
+chmod +x run-local run-prod run-docker scripts/init-localstack.sh scripts/setup-oracle-wallet.sh scripts/setup-efs-mount.sh scripts/prepare-wallet-for-docker.sh
 ./run-local
 ```
 

@@ -45,3 +45,5 @@ Wallet_DISPATCHFLOWDB/ewallet.p12
 Wallet_DISPATCHFLOWDB/cwallet.sso
 Wallet_DISPATCHFLOWDB/keystore.jks
 Wallet_DISPATCHFLOWDB/truststore.jks
+wallet/
+wallet.zip

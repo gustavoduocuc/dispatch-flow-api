@@ -47,19 +47,30 @@ No definir `AWS_S3_ENDPOINT` en producción; el SDK usa el endpoint regional de 
 
 ### Generar `ORACLE_WALLET_BASE64`
 
-```bash
-cd /ruta/a/dispatch-flow-api
-zip -r wallet.zip Wallet_DISPATCHFLOWDB
-base64 -i wallet.zip | pbcopy
-```
-
-Asignar el resultado al secret `ORACLE_WALLET_BASE64`.
-
-Alternativa si solo tienes el zip original:
+Usa el **zip original descargado de Oracle** (archivos `tnsnames.ora`, `cwallet.sso`, etc. en la raíz del zip, sin carpeta intermedia):
 
 ```bash
-base64 -i Wallet_DISPATCHFLOWDB.zip | pbcopy
+base64 -i /ruta/a/Wallet_DISPATCHFLOWDB.zip | pbcopy
 ```
+
+Ejemplo:
+
+```bash
+base64 -i ~/Downloads/dispatch-flow-creds/Wallet_DISPATCHFLOWDB.zip | pbcopy
+```
+
+Pega el resultado en el secret `ORACLE_WALLET_BASE64` de GitHub Actions.
+
+Verificar en local antes de subir el secret:
+
+```bash
+./scripts/prepare-wallet-for-docker.sh
+# con WALLET_ZIP apuntando al zip:
+WALLET_ZIP=~/Downloads/dispatch-flow-creds/Wallet_DISPATCHFLOWDB.zip ./scripts/prepare-wallet-for-docker.sh
+ls wallet/tnsnames.ora
+```
+
+**No uses** `zip -r wallet.zip Wallet_DISPATCHFLOWDB`: eso anida una carpeta extra y el wallet queda en `wallet/Wallet_DISPATCHFLOWDB/tnsnames.ora` en lugar de `wallet/tnsnames.ora`.
 
 ### Determinar `USER_SERVER`
 
