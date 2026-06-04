@@ -3,8 +3,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+./scripts/setup-oracle-wallet.sh
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+export TNS_ADMIN="${TNS_ADMIN:-$(pwd)/Wallet_DISPATCHFLOWDB}"
+export SPRING_PROFILES_ACTIVE=prod
+
+: "${SPRING_DATASOURCE_USERNAME:?Debe definir SPRING_DATASOURCE_USERNAME (copia .env.example a .env)}"
+: "${SPRING_DATASOURCE_PASSWORD:?Debe definir SPRING_DATASOURCE_PASSWORD (copia .env.example a .env)}"
 : "${AWS_REGION:?Debe definir AWS_REGION}"
 : "${S3_BUCKET_NAME:?Debe definir S3_BUCKET_NAME}"
 
-export SPRING_PROFILES_ACTIVE=prod
 ./mvnw spring-boot:run

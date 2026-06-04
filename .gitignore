@@ -34,3 +34,14 @@ build/
 
 .DS_Store
 tmp/
+
+.env
+.env.*
+!.env.example
+
+Wallet_DISPATCHFLOWDB.zip
+Wallet_DISPATCHFLOWDB/ewallet.pem
+Wallet_DISPATCHFLOWDB/ewallet.p12
+Wallet_DISPATCHFLOWDB/cwallet.sso
+Wallet_DISPATCHFLOWDB/keystore.jks
+Wallet_DISPATCHFLOWDB/truststore.jks

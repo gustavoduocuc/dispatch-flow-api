@@ -7,32 +7,47 @@ API para gestión de guías de despacho con generación automática de PDF, alma
 - Java 21
 - Maven 3.9+ (incluido vía `./mvnw`)
 - Docker (para desarrollo local con LocalStack)
+- Wallet Oracle Autonomous DB (solo para `./run-prod` o Docker prod)
 
-## Ejecutar en local (LocalStack + S3 emulado)
+## Ejecutar en local (H2 + LocalStack)
 
 ```bash
-chmod +x run-local run-prod scripts/init-localstack.sh
+chmod +x run-local run-prod scripts/init-localstack.sh scripts/setup-oracle-wallet.sh
 ./run-local
 ```
 
-Este script levanta LocalStack, crea el bucket `dispatch-flow-local` y arranca la API con perfil `local`.
+Este script levanta LocalStack, crea el bucket `dispatch-flow-local` y arranca la API con perfil `local` usando **H2 in-memory** (consola H2 disponible).
 
-## Ejecutar en producción
+## Oracle en producción (`./run-prod`)
 
-Variables obligatorias:
+En local contra Oracle real (perfil `prod`):
+
+```bash
+# 1. Copiar wallet zip a la raíz del proyecto
+cp /ruta/a/Wallet_DISPATCHFLOWDB.zip .
+
+# 2. Configurar credenciales
+cp .env.example .env
+# Editar .env: SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD, AWS_*
+
+# 3. Arrancar
+./run-prod
+```
+
+El script descomprime el wallet en `Wallet_DISPATCHFLOWDB/`, carga `.env`, configura `TNS_ADMIN` y conecta a Oracle ATP vía alias `dispatchflowdb_high`.
 
 | Variable | Descripción |
 |----------|-------------|
-| `AWS_REGION` | Región AWS (ej. `us-east-1`) |
-| `S3_BUCKET_NAME` | Bucket S3 (default prod: `dispatch-flow-prod`) |
+| `SPRING_DATASOURCE_URL` | Default: `jdbc:oracle:thin:@dispatchflowdb_high` |
+| `SPRING_DATASOURCE_USERNAME` | Usuario Oracle |
+| `SPRING_DATASOURCE_PASSWORD` | Contraseña Oracle |
+| `TNS_ADMIN` | Default: `./Wallet_DISPATCHFLOWDB` |
+| `AWS_REGION` | Región S3 |
+| `S3_BUCKET_NAME` | Bucket prod (`dispatch-flow-prod`) |
 
-Credenciales vía variables de entorno AWS estándar o rol IAM. Si usas credenciales temporales, define también `AWS_SESSION_TOKEN`.
+Archivos sensibles del wallet están en `.gitignore` (`ewallet.*`, `cwallet.sso`, `*.jks`). No versionar `.env`.
 
-```bash
-export AWS_REGION=us-east-1
-export S3_BUCKET_NAME=dispatch-flow-prod
-./run-prod
-```
+Despliegue automatizado en EC2: [docs/guia-despliegue-ec2.md](docs/guia-despliegue-ec2.md).
 
 ## Ejecutar tests
 
@@ -150,7 +165,7 @@ El proyecto sigue arquitectura hexagonal (inside-out):
 
 - **Dominio**: entidades, value objects, `GuidePdfPathBuilder`, repositorio
 - **Aplicación**: casos de uso, `GuidePdfEfsStorage`, `GuidePdfS3Storage`, puertos PDF/EFS/S3
-- **Infraestructura**: JPA/H2, PDFBox, `LocalEfsStorageAdapter`, `S3ObjectStorageAdapter`, controladores REST
+- **Infraestructura**: JPA (H2 local / Oracle prod), PDFBox, `LocalEfsStorageAdapter`, `S3ObjectStorageAdapter`, controladores REST
 
 ## Health check
 
