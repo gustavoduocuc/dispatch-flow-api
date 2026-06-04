@@ -4,7 +4,7 @@ Despliegue mediante [`.github/workflows/docker-deploy.yml`](../.github/workflows
 
 ## Requisitos previos
 
-- Aplicación operativa en local con `./run-prod` o Docker.
+- Aplicación operativa en local con `./run-prod` o Docker. (Recomendado)
 - Wallet Oracle en `Wallet_DISPATCHFLOWDB/` (generado desde `Wallet_DISPATCHFLOWDB.zip`).
 - Credenciales Oracle y AWS en `.env` (mismos valores que se usarán en los secrets de GitHub).
 
