@@ -53,6 +53,10 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
+          if [ ! -f wallet/tnsnames.ora ]; then
+            echo "wallet/tnsnames.ora no encontrado. Configure ORACLE_WALLET_BASE64 en GitHub Secrets." >&2
+            exit 1
+          fi
           docker build -t "${DOCKERHUB_USERNAME}/dispatch-flow-api:latest" .
           docker push "${DOCKERHUB_USERNAME}/dispatch-flow-api:latest"
 

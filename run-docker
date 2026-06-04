@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+if [ ! -f .env ]; then
+  echo "No se encontró .env. Copia .env.example a .env y completa las credenciales." >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+
+: "${SPRING_DATASOURCE_USERNAME:?Debe definir SPRING_DATASOURCE_USERNAME en .env}"
+: "${SPRING_DATASOURCE_PASSWORD:?Debe definir SPRING_DATASOURCE_PASSWORD en .env}"
+: "${AWS_REGION:?Debe definir AWS_REGION en .env}"
+: "${S3_BUCKET_NAME:?Debe definir S3_BUCKET_NAME en .env}"
+
+./scripts/setup-oracle-wallet.sh
+
+wallet_source="${WALLET_DIR:-$(pwd)/Wallet_DISPATCHFLOWDB}"
+mkdir -p wallet
+cp -R "${wallet_source}/." wallet/
+
+docker build -t dispatch-flow-api:local .
+
+mkdir -p ./tmp/efs-docker
+
+docker stop dispatch-flow-api 2>/dev/null || true
+docker rm dispatch-flow-api 2>/dev/null || true
+
+docker run -d --name dispatch-flow-api -p 8080:8080 --env-file .env \
+  -v "$(pwd)/tmp/efs-docker:/app/efs" \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e TNS_ADMIN=/app/wallet \
+  -e EFS_BASE_PATH=/app/efs \
+  dispatch-flow-api:local
+
+echo "Contenedor dispatch-flow-api en ejecución (imagen dispatch-flow-api:local)"
+echo "Health: http://localhost:8080/actuator/health"

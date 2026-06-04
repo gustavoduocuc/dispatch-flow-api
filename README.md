@@ -12,7 +12,7 @@ API para gestión de guías de despacho con generación automática de PDF, alma
 ## Ejecutar en local (H2 + LocalStack)
 
 ```bash
-chmod +x run-local run-prod scripts/init-localstack.sh scripts/setup-oracle-wallet.sh scripts/setup-efs-mount.sh
+chmod +x run-local run-prod run-docker scripts/init-localstack.sh scripts/setup-oracle-wallet.sh scripts/setup-efs-mount.sh
 ./run-local
 ```
 
@@ -48,6 +48,32 @@ El script descomprime el wallet en `Wallet_DISPATCHFLOWDB/`, carga `.env`, confi
 Archivos sensibles del wallet están en `.gitignore` (`ewallet.*`, `cwallet.sso`, `*.jks`). No versionar `.env`.
 
 Despliegue automatizado en EC2: [docs/guia-despliegue-ec2.md](docs/guia-despliegue-ec2.md).
+
+## Ejecutar con Docker (prod local)
+
+Simula producción en contenedor (`dispatch-flow-api:local`) con Oracle ATP, S3 real y EFS simulado en `./tmp/efs-docker`:
+
+```bash
+# 1. Copiar wallet zip a la raíz del proyecto
+cp /ruta/a/Wallet_DISPATCHFLOWDB.zip .
+
+# 2. Configurar credenciales
+cp .env.example .env
+# Editar .env: SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD, AWS_*
+
+# 3. Build + run
+./run-docker
+```
+
+El script prepara `wallet/` para la imagen, construye `dispatch-flow-api:local`, levanta el contenedor `dispatch-flow-api` en el puerto 8080 y monta `./tmp/efs-docker` en `/app/efs`.
+
+| Artefacto | Nombre |
+|-----------|--------|
+| Imagen local | `dispatch-flow-api:local` |
+| Imagen Docker Hub | `{DOCKERHUB_USERNAME}/dispatch-flow-api:latest` |
+| Contenedor | `dispatch-flow-api` |
+
+Despliegue completo vía Docker Hub: [docs/guia-despliegue-ec2.md](docs/guia-despliegue-ec2.md).
 
 ## Ejecutar tests
 

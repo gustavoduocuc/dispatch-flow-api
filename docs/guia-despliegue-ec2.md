@@ -179,24 +179,33 @@ Errores de despliegue: revisar el job `build-and-deploy` en **Actions** del repo
 
 ## Docker en local (referencia)
 
+Atajo recomendado:
+
 ```bash
 cp .env.example .env
 # Completar usuario, contraseña Oracle y credenciales AWS
 
+./run-docker
+curl http://localhost:8080/actuator/health
+```
+
+Equivalente manual (misma imagen `dispatch-flow-api:local`):
+
+```bash
 ./scripts/setup-oracle-wallet.sh
 mkdir -p wallet
 cp -R Wallet_DISPATCHFLOWDB/. wallet/
 
-docker build -t dispatch-flow-api .
+docker build -t dispatch-flow-api:local .
 mkdir -p ./tmp/efs-docker
 docker run -d --name dispatch-flow-api -p 8080:8080 --env-file .env \
   -v "$(pwd)/tmp/efs-docker:/app/efs" \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e TNS_ADMIN=/app/wallet \
   -e EFS_BASE_PATH=/app/efs \
-  dispatch-flow-api
+  dispatch-flow-api:local
 
 curl http://localhost:8080/actuator/health
 ```
 
-Ver también [README.md](../README.md) (sección «Oracle en producción»).
+Ver también [README.md](../README.md) (secciones «Oracle en producción» y «Ejecutar con Docker»).
