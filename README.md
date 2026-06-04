@@ -12,7 +12,7 @@ API para gestión de guías de despacho con generación automática de PDF, alma
 ## Ejecutar en local (H2 + LocalStack)
 
 ```bash
-chmod +x run-local run-prod scripts/init-localstack.sh scripts/setup-oracle-wallet.sh
+chmod +x run-local run-prod scripts/init-localstack.sh scripts/setup-oracle-wallet.sh scripts/setup-efs-mount.sh
 ./run-local
 ```
 
@@ -57,11 +57,12 @@ Despliegue automatizado en EC2: [docs/guia-despliegue-ec2.md](docs/guia-desplieg
 
 Los tests E2E usan almacenamiento S3 en memoria (`dispatch.storage.s3.enabled=false`) para CI estable.
 
-## Almacenamiento EFS (local / staging)
+## Almacenamiento EFS (local / producción)
 
-| Variable | Local (default) | Producción |
-|----------|-----------------|------------|
-| `EFS_BASE_PATH` | `./tmp/efs` | `/app/efs` |
+| Variable | Local (default) | EC2 Linux (prod) |
+|----------|-----------------|------------------|
+| `EFS_BASE_PATH` | `./tmp/efs` | `/app/efs` (dentro del contenedor) |
+| Mount en host | No aplica | `/mnt/dispatch-flow-efs` (AWS EFS) |
 
 Al **crear** o **actualizar** una guía, el sistema:
 
@@ -71,6 +72,16 @@ Al **crear** o **actualizar** una guía, el sistema:
 4. Persiste `efsPath`, `s3Key` y el status `UPLOADED_TO_S3`
 
 Si falla EFS o S3 durante POST/PUT, la operación completa falla.
+
+### EFS en EC2 (deploy con Docker Hub)
+
+Antes del primer deploy, monta tu EFS en el EC2 siguiendo **[docs/configuracion-efs-ec2.md](docs/configuracion-efs-ec2.md)** (comandos manuales; no hace falta clonar el repo en el servidor).
+
+El workflow enlaza `-v /mnt/dispatch-flow-efs:/app/efs`. Resumen del despliegue: [docs/guia-despliegue-ec2.md](docs/guia-despliegue-ec2.md).
+
+### EFS local (`./run-prod`)
+
+En `.env` puedes usar `EFS_BASE_PATH=./tmp/efs` sin montar AWS EFS. Opcionalmente existe `scripts/setup-efs-mount.sh` (solo referencia local; ver disclaimer en el script).
 
 ## Almacenamiento S3
 

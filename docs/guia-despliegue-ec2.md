@@ -10,6 +10,10 @@ Despliegue mediante [`.github/workflows/docker-deploy.yml`](../.github/workflows
 
 La wallet y el `.env` **no** se copian manualmente al servidor EC2. La wallet se incluye en la imagen durante el build en CI; usuario, contraseña Oracle y credenciales S3 se inyectan en el contenedor desde secrets de GitHub.
 
+En EC2, **AWS EFS debe montarse en el host Linux** antes del primer deploy; el contenedor recibe ese directorio en `/app/efs` vía volumen Docker.
+
+→ **[Configuración manual de EFS en EC2](configuracion-efs-ec2.md)** (pasos por DNS NFS4, sin clonar el repo; ajusta tu `fs-...` y región).
+
 ---
 
 ## 1. Secrets en GitHub
@@ -79,16 +83,30 @@ Copiar la salida completa al secret. No versionar el archivo `.pem` en el reposi
 
 ---
 
-## 2. Configuración de EC2
+## 2. EFS y volumen Docker
+
+La app escribe PDFs en el host **antes** de subirlos a S3. Configura y monta tu EFS siguiendo **[configuracion-efs-ec2.md](configuracion-efs-ec2.md)** (una vez por instancia EC2, antes del primer push a `main`).
+
+El pipeline enlaza automáticamente:
+
+```text
+-v /mnt/dispatch-flow-efs:/app/efs
+-e EFS_BASE_PATH=/app/efs
+```
+
+---
+
+## 3. Configuración de EC2
 
 - Docker instalado.
+- **EFS montado** en `/mnt/dispatch-flow-efs` ([configuracion-efs-ec2.md](configuracion-efs-ec2.md)).
 - Security group: regla de entrada TCP en el puerto **8080**.
 - Acceso SSH con la llave asociada a `EC2_SSH_KEY`.
 - No desplegar `Wallet_DISPATCHFLOWDB/` ni `.env` en el servidor.
 
 ---
 
-## 3. Ejecutar el despliegue
+## 4. Ejecutar el despliegue
 
 1. Publicar el código en GitHub (incluye el workflow).
 2. Push o merge a la rama `main`.
@@ -104,11 +122,11 @@ Secuencia del job `build-and-deploy`:
 2. Decodifica `ORACLE_WALLET_BASE64` → carpeta `wallet/` en contexto Docker
 3. Build de imagen Docker
 4. Push a `{DOCKERHUB_USERNAME}/dispatch-flow-api:latest`
-5. SSH a EC2: `docker pull`, recreación del contenedor con variables Oracle y S3
+5. SSH a EC2: `docker pull`, recreación del contenedor con volumen EFS, variables Oracle y S3
 
 ---
 
-## 4. Verificación
+## 5. Verificación
 
 Sustituir `<IP_EC2>` por la IP pública de la instancia:
 
@@ -135,6 +153,13 @@ curl -X POST "http://<IP_EC2>:8080/api/guides" \
 
 Respuesta esperada: `201 Created` con `status: UPLOADED_TO_S3` y `s3Key` poblado.
 
+Comprobar PDF en EFS (en el EC2):
+
+```bash
+ls -R /mnt/dispatch-flow-efs/guides/
+docker exec dispatch-flow-api ls -R /app/efs/guides/
+```
+
 Endpoint `/actuator/health`: respuesta con `"status":"UP"`.
 
 Errores de despliegue: revisar el job `build-and-deploy` en **Actions** del repositorio.
@@ -143,12 +168,12 @@ Errores de despliegue: revisar el job `build-and-deploy` en **Actions** del repo
 
 ## Resumen
 
-| Entorno | Wallet | Credenciales Oracle | S3 | Base de datos |
-| ------- | ------ | --------------------- | --- | ------------- |
-| Local (`./run-local`) | No aplica | No aplica | LocalStack | H2 in-memory |
-| Local prod (`./run-prod`) | `Wallet_DISPATCHFLOWDB/` | `.env` | `.env` | Oracle ATP |
-| GitHub | `ORACLE_WALLET_BASE64` | `SPRING_DATASOURCE_*` | secrets AWS | Oracle ATP |
-| EC2 | Imagen Docker (`/app/wallet`) | Variables en `docker run` | Mismas variables S3 | Oracle ATP |
+| Entorno | Wallet | Credenciales Oracle | S3 | EFS | Base de datos |
+| ------- | ------ | --------------------- | --- | --- | ------------- |
+| Local (`./run-local`) | No aplica | No aplica | LocalStack | `./tmp/efs` | H2 in-memory |
+| Local prod (`./run-prod`) | `Wallet_DISPATCHFLOWDB/` | `.env` | `.env` | `./tmp/efs` o `/app/efs` | Oracle ATP |
+| GitHub | `ORACLE_WALLET_BASE64` | `SPRING_DATASOURCE_*` | secrets AWS | — | Oracle ATP |
+| EC2 | Imagen Docker (`/app/wallet`) | Variables en `docker run` | Mismas variables S3 | Host `/mnt/dispatch-flow-efs` → contenedor `/app/efs` | Oracle ATP |
 
 ---
 
@@ -163,9 +188,12 @@ mkdir -p wallet
 cp -R Wallet_DISPATCHFLOWDB/. wallet/
 
 docker build -t dispatch-flow-api .
+mkdir -p ./tmp/efs-docker
 docker run -d --name dispatch-flow-api -p 8080:8080 --env-file .env \
+  -v "$(pwd)/tmp/efs-docker:/app/efs" \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e TNS_ADMIN=/app/wallet \
+  -e EFS_BASE_PATH=/app/efs \
   dispatch-flow-api
 
 curl http://localhost:8080/actuator/health

@@ -76,12 +76,14 @@ jobs:
           chmod 600 ~/.ssh/ec2_key.pem
 
           DATASOURCE_URL="${SPRING_DATASOURCE_URL:-jdbc:oracle:thin:@dispatchflowdb_high}"
+          EFS_HOST_MOUNT="${EFS_HOST_MOUNT:-/mnt/dispatch-flow-efs}"
 
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem "${USER_SERVER}@${EC2_HOST}" \
             "docker pull ${DOCKERHUB_USERNAME}/dispatch-flow-api:latest && \
              docker stop dispatch-flow-api 2>/dev/null || true && \
              docker rm dispatch-flow-api 2>/dev/null || true && \
              docker run -d --name dispatch-flow-api -p 8080:8080 \
+               -v ${EFS_HOST_MOUNT}:/app/efs \
                -e SPRING_PROFILES_ACTIVE=prod \
                -e SPRING_DATASOURCE_URL='${DATASOURCE_URL}' \
                -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
