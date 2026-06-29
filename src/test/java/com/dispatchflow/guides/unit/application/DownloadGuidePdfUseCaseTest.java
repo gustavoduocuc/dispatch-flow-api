@@ -12,6 +12,7 @@ import com.dispatchflow.shared.domain.DomainError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -74,4 +75,6 @@ class DownloadGuidePdfUseCaseTest {
                 LocalDate.of(2026, 6, 2),
                 "responsable@empresa.cl");
     }
+
 }
+
