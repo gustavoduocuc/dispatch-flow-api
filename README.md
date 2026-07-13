@@ -2,7 +2,7 @@
 
 API Gateway (AWS):** Cada endpoint de la API está configurado de manera explícita con su método HTTP correspondiente. Se eliminó el uso de la integración Proxy (`ANY /{proxy+}`) para garantizar un control de acceso granular y cumplir con las mejores prácticas de arquitectura. Ninguna petición anónima llega al servidor EC2.
 
-## 🛡️ Seguridad e Identidad (IDaaS)
+## Seguridad e Identidad (IDaaS)
 
 El sistema delega la identidad y la exposición a servicios administrados en la nube:
 - **API Gateway (AWS):** Todos los endpoints están ocultos detrás de una integración Proxy (`ANY /{proxy+}`). Ninguna petición anónima llega al servidor EC2.
